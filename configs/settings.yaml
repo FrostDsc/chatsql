@@ -19,3 +19,9 @@ execution:
 mock:
   # CHATSQL_MOCK=1 或 api_key 为空时使用 mock 客户端（离线开发/测试用）
   enabled: ${CHATSQL_MOCK:-0}
+
+agent:
+  max_correction_rounds: 3    # SQL 生成-执行 的最大纠错轮次
+  linking_table_threshold: 20 # 表数超过该值才启用 schema linking 裁剪
+  retry_on_empty: true        # 结果为空时给一次"检查过滤条件"的修正机会
+  trace_dir: runs             # trace 日志目录（JSONL）

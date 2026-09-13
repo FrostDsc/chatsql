@@ -49,6 +49,10 @@ class Settings:
     exec_timeout: int = 30
     exec_max_rows: int = 100
     mock_enabled: bool = field(default=False)
+    agent_max_rounds: int = 3
+    linking_table_threshold: int = 20
+    retry_on_empty: bool = True
+    trace_dir: Path = field(default=PROJECT_ROOT / "runs")
 
     @property
     def use_mock(self) -> bool:
@@ -65,6 +69,11 @@ def load_settings(config_path: str | Path | None = None) -> Settings:
     if not db_root.is_absolute():
         db_root = PROJECT_ROOT / db_root
 
+    agent = raw.get("agent", {})
+    trace_dir = Path(agent.get("trace_dir", "runs"))
+    if not trace_dir.is_absolute():
+        trace_dir = PROJECT_ROOT / trace_dir
+
     return Settings(
         model=ModelConfig(
             name=model["name"],
@@ -78,6 +87,10 @@ def load_settings(config_path: str | Path | None = None) -> Settings:
         exec_timeout=int(raw.get("execution", {}).get("timeout_seconds", 30)),
         exec_max_rows=int(raw.get("execution", {}).get("max_rows", 100)),
         mock_enabled=str(raw.get("mock", {}).get("enabled", "0")).lower() in ("1", "true", "yes"),
+        agent_max_rounds=int(agent.get("max_correction_rounds", 3)),
+        linking_table_threshold=int(agent.get("linking_table_threshold", 20)),
+        retry_on_empty=str(agent.get("retry_on_empty", True)).lower() in ("1", "true", "yes"),
+        trace_dir=trace_dir,
     )
 
 

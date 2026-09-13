@@ -27,15 +27,20 @@ class OpenAICompatClient:
 
 
 class MockClient:
-    """离线 mock：从用户消息里提取 ```sql 代码块原样返回，否则返回固定 SQL。
+    """离线 mock：默认返回固定 SQL；传入 responses 列表则逐次消费（脚本化）。
 
     供无 API key 时开发和跑测试用（CHATSQL_MOCK=1）。
     """
 
-    def __init__(self, canned_sql: str = "SELECT 1"):
+    def __init__(self, canned_sql: str = "SELECT 1", responses: list[str] | None = None):
         self._canned_sql = canned_sql
+        self._responses = list(responses) if responses else None
         self.calls: list[list[Message]] = []
 
     def chat(self, messages: list[Message]) -> str:
         self.calls.append(messages)
+        if self._responses is not None:
+            if self._responses:
+                return self._responses.pop(0)
+            return "（mock 响应已耗尽）"
         return f"```sql\n{self._canned_sql}\n```"
