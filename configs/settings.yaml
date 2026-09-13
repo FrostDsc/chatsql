@@ -1,0 +1,21 @@
+# ChatSQL 配置
+model:
+  # 任意 OpenAI 兼容端点：DeepSeek / Qwen / OpenAI / Ollama
+  name: ${MODEL_NAME:-deepseek-chat}
+  base_url: ${OPENAI_BASE_URL:-https://api.deepseek.com}
+  api_key: ${OPENAI_API_KEY:-}
+  temperature: 0.0
+  max_tokens: 2048
+  timeout: 60
+
+database:
+  # BIRD mini_dev 数据库根目录，每个子目录是一个库
+  root: data/mini_dev_data/dev_databases
+
+execution:
+  timeout_seconds: 30
+  max_rows: 100
+
+mock:
+  # CHATSQL_MOCK=1 或 api_key 为空时使用 mock 客户端（离线开发/测试用）
+  enabled: ${CHATSQL_MOCK:-0}
