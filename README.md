@@ -1,16 +1,59 @@
 # ChatSQL
 
-Agentic Text-to-SQL：用自然语言查询 SQLite 数据库，基于 BIRD mini_dev 基准。
+Agentic Text-to-SQL：用自然语言查询 SQLite 数据库（中英文提问均可）。
 
-> 开发进度：阶段 5/6 已完成（Streamlit 界面 + 图表可视化），详见 git tags。
+BIRD mini_dev 基准（500 题）执行准确率 **54.1%**，高出 BIRD 论文官方 GPT-4 baseline（47.8%）6.3 个百分点；54 个测试；每次问答全链路 trace 落盘。
+
+![ChatSQL 演示：自然语言提问 → SQL → 结果表 → 自动图表](docs/demo.png)
+
+## 亮点
+
+- **Agent 闭环，而非单次生成**：LangGraph 状态机，SQL 生成 → sqlglot 只读校验 → SQLite 限时限量执行 → 失败带错误信息自纠错（最多 3 轮）→ 自然语言回答；超界问题走澄清路径，不会硬编 SQL
+- **RAG 检索增强**：索引三类文档（相似问答对 / 专家知识 / 列描述），本地 all-MiniLM-L6-v2 embedding + numpy 自实现向量库（单库数百文档，暴力检索毫秒级）；评测按 question_id 留一排除防数据泄漏——RAG 带来 +10.9pp
+- **实验驱动**：500 题 × 3 配置全量消融；一次完整的"假设 → 对照实验 → 证伪 → 逐题归因"阴性结果记录（见评测章节）
+- **双界面**：CLI（单问 / 多轮对话 / trace 调试）+ Streamlit Web（对话式问答、结果自动出图、侧边栏 agent trace）
+- **工程可复现**：任意 OpenAI 兼容端点（DeepSeek / Qwen / Ollama）、评测断点续跑与限流退避、无 API key 自动进入离线 mock 演示模式
+
+## 架构
+
+```mermaid
+flowchart TD
+    A["load_schema 读取库 schema"] --> B["link_schema 表数超阈值才裁剪"]
+    B --> C["retrieve RAG 检索示例与知识"]
+    C --> D["generate_sql LLM 生成 SQL"]
+    D -->|"模型未给出 SQL（超界问题直接澄清）"| Z((结束))
+    D --> E["validate_sql sqlglot 解析 + 只读校验"]
+    E -->|"校验失败，带原因重试"| D
+    E -->|通过| F["execute_sql 限时限量执行"]
+    E -->|"超过最大轮次"| G["decline 说明无法回答"]
+    F -->|"执行报错，带错误重试"| D
+    F -->|"结果为空，软重试一次"| D
+    F -->|"超过最大轮次"| G
+    F -->|成功| H["generate_answer 生成自然语言回答"]
+    G --> Z
+    H --> Z
+```
+
+模块划分：
+
+- `src/chatsql/agent/` — 状态机节点与路由、prompt、trace 落盘（`runs/*.jsonl`）
+- `src/chatsql/rag/` — 索引构建与检索（embedding 抽象 / numpy 向量库）
+- `src/chatsql/db/` — schema 抽取、只读执行器（默认 30s 超时、100 行上限）
+- `src/chatsql/llm/` — OpenAI 兼容客户端 + 离线 mock
+- `src/chatsql/eval/` — 评测 runner（并发 / 断点续跑 / 429 退避）、EX 指标、对比报告生成
 
 ## 快速开始
 
+环境：Python 3.13+ 与 [uv](https://docs.astral.sh/uv/)。
+
 ```bash
 uv sync
-uv run python scripts/download_data.py   # 下载 BIRD mini_dev（约 800MB）
-cp .env.example .env                     # 填入你的 OpenAI 兼容 API key
+uv run python scripts/download_data.py   # 下载 BIRD mini_dev（约 800MB，国内走阿里云 OSS 直链）
+cp .env.example .env                     # 不填 key 即为离线 mock 演示模式；填入 OpenAI 兼容 key 即可真实问答
+uv run python scripts/build_index.py     # 构建 RAG 索引（首次会下载约 90MB embedding 模型）
+```
 
+```bash
 # 单问（Agent 闭环：生成 → 校验 → 执行 → 自纠错 → 回答）
 uv run python cli.py --db california_schools "How many schools have free meal rate above 50%?"
 
@@ -24,23 +67,33 @@ uv run python cli.py --db student_club --verbose "What's Angela Sanders's major?
 uv run streamlit run app.py
 ```
 
-未配置 API key 时自动进入 mock 模式，可用于离线开发。
+不建索引也能跑：retrieve 节点会跳过并在 trace 注明，只是没有 RAG 增益。
 
-## 架构
+## 配置
 
-LangGraph 状态机：`load_schema → link_schema（大库才裁剪）→ retrieve（RAG）→ generate_sql → validate_sql（只读校验）→ execute_sql →（失败自纠错，最多 3 轮）→ generate_answer`。
-每次问答的完整 trace 落盘到 `runs/*.jsonl`。
+所有参数集中在 `configs/settings.yaml`，支持 `${VAR:-default}` 环境变量展开（shell 或 `.env` 注入）：
 
-## RAG 检索
+| 配置 | 默认 | 说明 |
+|---|---|---|
+| `model.name` / `base_url` / `api_key` | deepseek-chat / api.deepseek.com / 空 | 任意 OpenAI 兼容端点；key 为空自动进入 mock 模式 |
+| `database.root` | `data/mini_dev_data/dev_databases` | 可用 `CHATSQL_DB_ROOT` 指向自己的库目录 |
+| `agent.max_correction_rounds` | 3 | 生成-执行最大自纠错轮次 |
+| `agent.retry_on_empty` | true | 空结果软重试开关（消融实验产物，见评测章节） |
+| `agent.linking_table_threshold` | 20 | 表数超过该值才启用 schema linking 裁剪 |
+| `rag.enabled` / `top_k_examples` / `top_k_knowledge` | 开 / 3 / 3 | 检索开关与条数；`CHATSQL_RAG=0` 或 `--no-rag` 关闭 |
+| `execution.timeout_seconds` / `max_rows` | 30 / 100 | 只读执行的保护限制 |
 
-```bash
-uv run python scripts/build_index.py   # 构建索引（首次下载约 90MB embedding 模型）
+## 项目结构
+
 ```
-
-- 索引三类文档：相似问答对（few-shot）、专家知识（evidence）、列描述（database_description）
-- Embedding 用本地 `all-MiniLM-L6-v2`，向量库为 numpy 自实现（余弦相似度）
-- 评测时支持按 `question_id` 留一排除，避免数据泄漏
-- 消融开关：`--no-rag` 或 `CHATSQL_RAG=0`
+├── app.py                  # Streamlit Web 界面
+├── cli.py                  # 命令行入口（单问 / 多轮 / trace）
+├── configs/settings.yaml   # 全部可调参数
+├── src/chatsql/            # agent / rag / db / llm / eval / viz
+├── scripts/                # 数据下载、索引构建、评测、报告生成
+├── tests/                  # 54 个测试（uv run pytest）
+└── eval/reports/           # 评测对比报告（含逐题明细）
+```
 
 ## 评测（BIRD mini_dev，500 题，Execution Accuracy）
 
@@ -70,6 +123,29 @@ uv run python scripts/run_eval.py --config agent_rag --tag full_agent_rag
 uv run python scripts/make_report.py full_direct full_agent full_agent_rag
 ```
 
+## 难点与解决
+
+1. **embedding 模型并发调用死锁**：评测 runner 多线程并发时，sentence-transformers 的模型加载与推理偶发死锁。解法：embedder 内用锁把加载和 encode 串行化（`rag/embedder.py`）——embedding 不是吞吐瓶颈，影响可忽略。
+
+2. **sqlglot 宽松解析把中文句子当合法 SQL**：模型对超界问题直接输出中文解释时，sqlglot 会把整句话解析成一个标识符（Column 节点），"语法校验"居然通过，随后执行报错、空转 3 轮才降级。解法：校验不满足于"能 parse"，要求语法树中存在 Select/Union 等查询节点（`agent/nodes.py` 的 `_looks_like_sql()`）；模型未产出 SQL 时直接走澄清路径。
+
+3. **BIRD 数据包结构与冗余**：官方 zip 解压是 `minidev/MINIDEV` 嵌套目录，还捆绑 MySQL/PostgreSQL 两份共约 2GB 无关数据。解法：下载脚本自动归一化目录、裁剪冗余，并校验完整性（11 库 + 500 题），失败时给出手动下载指引（`scripts/download_data.py`）。
+
+4. **transformers × Streamlit 的隐蔽冲突**：transformers 5.x 的 zoedepth 图像处理器在模块顶层无守卫地 `import torchvision`（其他视觉模型文件都有守卫）；Streamlit 的文件监听器遍历 `sys.modules` 访问属性时触发该模块懒加载，Web 界面报 `ModuleNotFoundError: No module named 'torchvision'`，而 CLI 完全正常。解法：显式声明 torchvision 依赖。
+
+5. **.gitignore 目录排除陷阱**：`eval/reports/` 整目录排除后，`!eval/reports/compare_*.md` 反选不生效（git 不会进入被排除的目录）。解法：改为 `eval/reports/*` + `!eval/reports/compare_*.md`。
+
+## 局限与方向
+
+- 剩余失败以**语义错误**为主（表列选对但条件/聚合逻辑偏差），自纠错对执行错误有效、对语义错误无解——下一步是生成端增强（更精细的 schema linking、ExCoT 式推理链）
+- 只评了 EX（结果正确性），未评 VES（SQL 执行效率）；真实业务场景还需慢查询治理
+- 索引为离线静态构建，未做增量更新；多轮对话的指代消解目前依赖 prompt，未做专门的对话状态管理
+
 ## 数据来源
 
 [BIRD Mini-Dev](https://github.com/bird-bench/mini_dev)：500 条高质量 text-to-SQL 问答对，覆盖 11 个 SQLite 数据库。
+BIRD 论文：*Can LLM Already Serve as A Database Interface? A Comprehensive Evaluation for Large-Scale Database-Grounded Text-to-SQLs*（NeurIPS 2023），数据遵循 CC BY-SA 4.0。
+
+## License
+
+代码 MIT（见 `LICENSE`）；数据集遵循其原始许可。

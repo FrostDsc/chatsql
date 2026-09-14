@@ -16,3 +16,7 @@ runs/
 eval/reports/*
 !eval/reports/compare_*.md
 .DS_Store
+
+# Streamlit 运行时自动创建的 agent skill 符号链接（指向 .venv，机器相关）
+.agents/
+.claude/

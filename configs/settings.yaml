@@ -9,8 +9,8 @@ model:
   timeout: 60
 
 database:
-  # BIRD mini_dev 数据库根目录，每个子目录是一个库
-  root: data/mini_dev_data/dev_databases
+  # BIRD mini_dev 数据库根目录，每个子目录是一个库；可用 CHATSQL_DB_ROOT 指向自己的库目录
+  root: ${CHATSQL_DB_ROOT:-data/mini_dev_data/dev_databases}
 
 execution:
   timeout_seconds: 30
