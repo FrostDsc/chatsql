@@ -2,7 +2,7 @@
 
 Agentic Text-to-SQL：用自然语言查询 SQLite 数据库，基于 BIRD mini_dev 基准。
 
-> 开发进度：阶段 4/6 已完成（RAG + 评测消融），详见 git tags。
+> 开发进度：阶段 5/6 已完成（Streamlit 界面 + 图表可视化），详见 git tags。
 
 ## 快速开始
 
@@ -19,6 +19,9 @@ uv run python cli.py --db student_club --chat
 
 # 调试：打印每步 trace；--mode direct 使用无纠错的单发 baseline
 uv run python cli.py --db student_club --verbose "What's Angela Sanders's major?"
+
+# Web 界面（推荐演示用）：选库、对话、SQL/结果表/自动图表、侧边栏 trace
+uv run streamlit run app.py
 ```
 
 未配置 API key 时自动进入 mock 模式，可用于离线开发。

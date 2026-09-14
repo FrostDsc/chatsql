@@ -1,8 +1,12 @@
 """Agent 节点函数。通过 make_nodes(llm, settings) 闭包注入依赖，便于测试。"""
 from __future__ import annotations
 
+import re
 import time
 from pathlib import Path
+
+import sqlglot
+from sqlglot import expressions as exp
 
 from chatsql.agent.prompts import (
     ANSWER_SYSTEM,
@@ -31,6 +35,28 @@ def _format_error_history(history: list[dict]) -> str:
     for i, h in enumerate(history, 1):
         parts.append(f"第 {i} 次：\n```sql\n{h['sql']}\n```\n错误：{h['error']}")
     return "\n\n".join(parts)
+
+
+_SQL_BLOCK = re.compile(r"```(?:sql)?\s*(.*?)```", re.DOTALL | re.IGNORECASE)
+
+
+def _looks_like_sql(raw: str, extracted: str) -> bool:
+    """判断模型回复里是否真的有 SQL：有代码块，或裸文本能解析出查询语句。
+
+    注意 sqlglot 非常宽松（中文句子会被解析成 Column），所以要求必须是查询类节点。
+    """
+    if _SQL_BLOCK.search(raw):
+        return True
+    try:
+        stmts = [s for s in sqlglot.parse(extracted, read="sqlite") if s is not None]
+    except Exception:
+        return False
+    if len(stmts) != 1:
+        return False
+    stmt = stmts[0]
+    if isinstance(stmt, (exp.Select, exp.Union, exp.Intersect, exp.Except)):
+        return True
+    return isinstance(stmt, exp.Subquery) and isinstance(stmt.this, exp.Select)
 
 
 def make_nodes(llm: LLMClient, settings: Settings, retriever=None):
@@ -132,9 +158,21 @@ def make_nodes(llm: LLMClient, settings: Settings, retriever=None):
         raw = llm.chat(messages)
         sql = extract_sql(raw)
         attempts = state.get("attempts", 0) + 1
+
+        # 模型没有产出 SQL（在澄清/解释，如问题超出 schema）：直接把它的话作为回答
+        if not _looks_like_sql(raw, sql):
+            return {
+                "sql_draft": "",
+                "attempts": attempts,
+                "no_sql": True,
+                "answer": raw.strip(),
+                "status": "ok",
+                "trace": [make_event("generate_sql", t0, "模型未生成 SQL，按澄清处理")],
+            }
         return {
             "sql_draft": sql,
             "attempts": attempts,
+            "no_sql": False,
             "trace": [make_event("generate_sql", t0, f"第 {attempts} 次生成：{sql[:80]}")],
         }
 

@@ -126,6 +126,18 @@ class TestSchemaLinking:
         assert link_events and "skipped" in link_events[0]["summary"]
 
 
+class TestClarification:
+    def test_non_sql_response_becomes_answer(self, settings, db_path):
+        """模型返回纯文本（如澄清/无法回答）时不进入纠错循环，直接作为回答。"""
+        mock = MockClient(responses=["这个数据库没有存储专业信息，请换一个数据库提问。"])
+        state = run(mock, settings, db_path, "每个专业多少人？")
+
+        assert state["status"] == "ok"
+        assert "专业" in state["answer"]
+        assert len(mock.calls) == 1  # 没有无意义的重试
+        assert not state.get("error_history")
+
+
 class TestTrace:
     def test_trace_covers_full_path(self, settings, db_path):
         mock = MockClient(responses=[

@@ -47,7 +47,11 @@ def build_agent(llm: LLMClient, settings: Settings, retriever=None, with_answer:
     g.add_edge("load_schema", "link_schema")
     g.add_edge("link_schema", "retrieve")
     g.add_edge("retrieve", "generate_sql")
-    g.add_edge("generate_sql", "validate_sql")
+    g.add_conditional_edges(
+        "generate_sql",
+        lambda s: "end" if s.get("no_sql") else "validate",
+        {"validate": "validate_sql", "end": END},
+    )
     g.add_conditional_edges(
         "validate_sql",
         lambda s: _route_after_validate(s, settings.agent_max_rounds),
