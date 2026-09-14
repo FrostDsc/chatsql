@@ -169,6 +169,7 @@ def make_nodes(llm: LLMClient, settings: Settings, retriever=None):
         rows_n = len(result.rows)
         return {
             "query_result": {"columns": result.columns, "rows": result.rows, "truncated": result.truncated},
+            "status": "ok",
             "trace": [make_event("execute_sql", t0, f"成功，{rows_n} 行{'（截断）' if result.truncated else ''}")],
         }
 

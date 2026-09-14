@@ -14,4 +14,5 @@ wheels/
 data/
 runs/
 eval/reports/
+!eval/reports/compare_*.md
 .DS_Store

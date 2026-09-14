@@ -33,11 +33,15 @@ def _route_after_execute(state: AgentState, settings: Settings) -> str:
     return "answer"
 
 
-def build_agent(llm: LLMClient, settings: Settings, retriever=None):
+def build_agent(llm: LLMClient, settings: Settings, retriever=None, with_answer: bool = True):
     nodes = make_nodes(llm, settings, retriever=retriever)
     g = StateGraph(AgentState)
     for name, fn in nodes.items():
+        if name == "generate_answer" and not with_answer:
+            continue
         g.add_node(name, fn)
+
+    answer_target = "generate_answer" if with_answer else END
 
     g.set_entry_point("load_schema")
     g.add_edge("load_schema", "link_schema")
@@ -53,14 +57,15 @@ def build_agent(llm: LLMClient, settings: Settings, retriever=None):
         "execute_sql",
         lambda s: _route_after_execute(s, settings),
         {
-            "answer": "generate_answer",
+            "answer": answer_target,
             "retry": "generate_sql",
             "empty_retry": "mark_empty_retry",
             "decline": "decline",
         },
     )
     g.add_edge("mark_empty_retry", "generate_sql")
-    g.add_edge("generate_answer", END)
+    if with_answer:
+        g.add_edge("generate_answer", END)
     g.add_edge("decline", END)
     return g.compile()
 
@@ -87,15 +92,17 @@ def ask(
     save_trace_to: Path | None | object = _UNSET,
     retriever=_UNSET,
     exclude_question_ids: list[int] | None = None,
+    with_answer: bool = True,
 ) -> AgentState:
     """跑一轮完整 Agent 问答，返回最终状态（含 answer/status/trace）。
 
     save_trace_to 默认（不传）写入 settings.trace_dir；显式传 None 则关闭落盘。
     retriever 默认按 settings.rag 自动构建；显式传 None 则关闭检索（测试/消融用）。
+    with_answer=False 时跳过自然语言答案生成（评测用，省 token）。
     """
     if retriever is _UNSET:
         retriever = _make_retriever(settings)
-    graph = build_agent(llm, settings, retriever=retriever)
+    graph = build_agent(llm, settings, retriever=retriever, with_answer=with_answer)
     initial: AgentState = {
         "question": question,
         "db_path": str(db_path),

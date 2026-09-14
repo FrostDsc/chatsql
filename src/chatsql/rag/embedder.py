@@ -1,12 +1,13 @@
 """Embedding 抽象与实现。
 
 - Embedder：协议，任何实现 encode(texts) -> 单位向量矩阵 的对象
-- SentenceTransformerEmbedder：生产用，懒加载模型
+- SentenceTransformerEmbedder：生产用，懒加载模型（线程安全）
 - HashEmbedder：测试用，确定性、零依赖、不下载模型
 """
 from __future__ import annotations
 
 import hashlib
+import threading
 from typing import Protocol
 
 import numpy as np
@@ -22,16 +23,20 @@ class SentenceTransformerEmbedder:
     def __init__(self, model_name: str = "all-MiniLM-L6-v2"):
         self._model_name = model_name
         self._model = None
+        self._lock = threading.Lock()
 
     def _load(self):
         if self._model is None:
-            from sentence_transformers import SentenceTransformer
-            self._model = SentenceTransformer(self._model_name)
+            with self._lock:  # 多线程并发首调时只允许一个线程加载模型
+                if self._model is None:
+                    from sentence_transformers import SentenceTransformer
+                    self._model = SentenceTransformer(self._model_name)
         return self._model
 
     def encode(self, texts: list[str]) -> np.ndarray:
         model = self._load()
-        return np.asarray(model.encode(texts, normalize_embeddings=True), dtype=np.float32)
+        with self._lock:  # sentence-transformers 的并发 encode 可能死锁，串行化
+            return np.asarray(model.encode(texts, normalize_embeddings=True), dtype=np.float32)
 
 
 class HashEmbedder:
