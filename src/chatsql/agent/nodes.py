@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import time
+from pathlib import Path
 
 from chatsql.agent.prompts import (
     ANSWER_SYSTEM,
@@ -9,8 +10,10 @@ from chatsql.agent.prompts import (
     CORRECTION_APPENDIX,
     DECLINE_TEMPLATE,
     EMPTY_RESULT_HINT,
+    EXAMPLES_SECTION,
     GENERATE_SYSTEM,
     GENERATE_USER,
+    KNOWLEDGE_SECTION,
     LINKING_SYSTEM,
     LINKING_USER,
 )
@@ -30,7 +33,7 @@ def _format_error_history(history: list[dict]) -> str:
     return "\n\n".join(parts)
 
 
-def make_nodes(llm: LLMClient, settings: Settings):
+def make_nodes(llm: LLMClient, settings: Settings, retriever=None):
     def load_schema(state: AgentState) -> dict:
         t0 = time.monotonic()
         tables = extract_schema(state["db_path"])
@@ -72,9 +75,49 @@ def make_nodes(llm: LLMClient, settings: Settings):
             )],
         }
 
+    def retrieve(state: AgentState) -> dict:
+        t0 = time.monotonic()
+        if not settings.rag.enabled or retriever is None:
+            return {
+                "retrieved_examples": [],
+                "retrieved_knowledge": [],
+                "trace": [make_event("retrieve", t0, "skipped：RAG 未启用")],
+            }
+        db_id = Path(state["db_path"]).stem
+        if not retriever.available(db_id):
+            return {
+                "retrieved_examples": [],
+                "retrieved_knowledge": [],
+                "trace": [make_event("retrieve", t0, f"skipped：{db_id} 无索引（先运行 scripts/build_index.py）")],
+            }
+        result = retriever.retrieve(
+            db_id, state["question"],
+            top_k_examples=settings.rag.top_k_examples,
+            top_k_knowledge=settings.rag.top_k_knowledge,
+            exclude_question_ids=set(state.get("exclude_question_ids", [])),
+        )
+        examples = [d.text for d in result.examples]
+        knowledge = [d.text for d in result.knowledge]
+        return {
+            "retrieved_examples": examples,
+            "retrieved_knowledge": knowledge,
+            "trace": [make_event("retrieve", t0, f"命中 {len(examples)} 条示例、{len(knowledge)} 条知识")],
+        }
+
     def generate_sql(state: AgentState) -> dict:
         t0 = time.monotonic()
         user = GENERATE_USER.format(schema=state["schema_text"], question=state["question"])
+
+        examples = state.get("retrieved_examples") or []
+        if examples:
+            user += EXAMPLES_SECTION.format(
+                examples="\n\n".join(f"---\n{e}" for e in examples)
+            )
+        knowledge = state.get("retrieved_knowledge") or []
+        if knowledge:
+            user += KNOWLEDGE_SECTION.format(
+                knowledge="\n".join(f"- {k}" for k in knowledge)
+            )
 
         history = state.get("error_history", [])
         if history:
@@ -169,6 +212,7 @@ def make_nodes(llm: LLMClient, settings: Settings):
     return {
         "load_schema": load_schema,
         "link_schema": link_schema,
+        "retrieve": retrieve,
         "generate_sql": generate_sql,
         "validate_sql": validate_sql,
         "execute_sql": execute_sql,

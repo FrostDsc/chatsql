@@ -136,6 +136,6 @@ class TestTrace:
 
         nodes = [e["node"] for e in state["trace"]]
         assert nodes == [
-            "load_schema", "link_schema", "generate_sql",
+            "load_schema", "link_schema", "retrieve", "generate_sql",
             "validate_sql", "execute_sql", "generate_answer",
         ]

@@ -25,8 +25,19 @@ uv run python cli.py --db student_club --verbose "What's Angela Sanders's major?
 
 ## 架构
 
-LangGraph 状态机：`load_schema → link_schema（大库才裁剪）→ generate_sql → validate_sql（只读校验）→ execute_sql →（失败自纠错，最多 3 轮）→ generate_answer`。
+LangGraph 状态机：`load_schema → link_schema（大库才裁剪）→ retrieve（RAG）→ generate_sql → validate_sql（只读校验）→ execute_sql →（失败自纠错，最多 3 轮）→ generate_answer`。
 每次问答的完整 trace 落盘到 `runs/*.jsonl`。
+
+## RAG 检索
+
+```bash
+uv run python scripts/build_index.py   # 构建索引（首次下载约 90MB embedding 模型）
+```
+
+- 索引三类文档：相似问答对（few-shot）、专家知识（evidence）、列描述（database_description）
+- Embedding 用本地 `all-MiniLM-L6-v2`，向量库为 numpy 自实现（余弦相似度）
+- 评测时支持按 `question_id` 留一排除，避免数据泄漏
+- 消融开关：`--no-rag` 或 `CHATSQL_RAG=0`
 
 ## 数据来源
 

@@ -43,6 +43,15 @@ class ModelConfig:
 
 
 @dataclass(frozen=True)
+class RagConfig:
+    enabled: bool = True
+    top_k_examples: int = 3
+    top_k_knowledge: int = 3
+    embedding_model: str = "all-MiniLM-L6-v2"
+    index_dir: Path = field(default=PROJECT_ROOT / "data" / "index")
+
+
+@dataclass(frozen=True)
 class Settings:
     model: ModelConfig
     db_root: Path
@@ -53,6 +62,7 @@ class Settings:
     linking_table_threshold: int = 20
     retry_on_empty: bool = True
     trace_dir: Path = field(default=PROJECT_ROOT / "runs")
+    rag: RagConfig = field(default_factory=RagConfig)
 
     @property
     def use_mock(self) -> bool:
@@ -91,6 +101,20 @@ def load_settings(config_path: str | Path | None = None) -> Settings:
         linking_table_threshold=int(agent.get("linking_table_threshold", 20)),
         retry_on_empty=str(agent.get("retry_on_empty", True)).lower() in ("1", "true", "yes"),
         trace_dir=trace_dir,
+        rag=_parse_rag(raw.get("rag", {})),
+    )
+
+
+def _parse_rag(raw: dict) -> RagConfig:
+    index_dir = Path(raw.get("index_dir", "data/index"))
+    if not index_dir.is_absolute():
+        index_dir = PROJECT_ROOT / index_dir
+    return RagConfig(
+        enabled=str(raw.get("enabled", True)).lower() in ("1", "true", "yes"),
+        top_k_examples=int(raw.get("top_k_examples", 3)),
+        top_k_knowledge=int(raw.get("top_k_knowledge", 3)),
+        embedding_model=str(raw.get("embedding_model", "all-MiniLM-L6-v2")),
+        index_dir=index_dir,
     )
 
 

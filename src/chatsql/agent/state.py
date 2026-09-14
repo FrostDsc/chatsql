@@ -28,6 +28,9 @@ class AgentState(TypedDict, total=False):
     schema_text: str
     table_names: list[str]
     _tables: list[Any]                               # load_schema 缓存的 TableInfo，供 link_schema 用
+    exclude_question_ids: list[int]                  # 评测时传当前题 id，检索留一排除
+    retrieved_examples: list[str]                    # retrieve 节点命中的相似问答对
+    retrieved_knowledge: list[str]                   # retrieve 节点命中的知识/列描述
     sql_draft: str                                     # 当前轮次生成的 SQL
     error_history: Annotated[list[SQLError], operator.add]
     attempts: int                                      # 已生成 SQL 的次数

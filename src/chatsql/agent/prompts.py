@@ -18,6 +18,14 @@ CORRECTION_APPENDIX = """
 以下之前的尝试失败了，请分析原因并生成修正后的 SQL，不要重复同样的错误：
 {history}"""
 
+EXAMPLES_SECTION = """
+相似问题的参考示例（注意：示例仅参考思路，当前问题的表和条件可能不同）：
+{examples}"""
+
+KNOWLEDGE_SECTION = """
+与该问题相关的业务知识和列说明：
+{knowledge}"""
+
 EMPTY_RESULT_HINT = """
 注意：上一次生成的 SQL 执行成功但返回了 0 行结果：
 ```sql

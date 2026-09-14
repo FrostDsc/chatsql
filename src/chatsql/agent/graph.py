@@ -33,15 +33,16 @@ def _route_after_execute(state: AgentState, settings: Settings) -> str:
     return "answer"
 
 
-def build_agent(llm: LLMClient, settings: Settings):
-    nodes = make_nodes(llm, settings)
+def build_agent(llm: LLMClient, settings: Settings, retriever=None):
+    nodes = make_nodes(llm, settings, retriever=retriever)
     g = StateGraph(AgentState)
     for name, fn in nodes.items():
         g.add_node(name, fn)
 
     g.set_entry_point("load_schema")
     g.add_edge("load_schema", "link_schema")
-    g.add_edge("link_schema", "generate_sql")
+    g.add_edge("link_schema", "retrieve")
+    g.add_edge("retrieve", "generate_sql")
     g.add_edge("generate_sql", "validate_sql")
     g.add_conditional_edges(
         "validate_sql",
@@ -67,6 +68,16 @@ def build_agent(llm: LLMClient, settings: Settings):
 _UNSET = object()
 
 
+def _make_retriever(settings: Settings):
+    """RAG 开启时构建检索器（懒加载 embedding 模型）；关闭时返回 None。"""
+    if not settings.rag.enabled:
+        return None
+    from chatsql.rag.embedder import SentenceTransformerEmbedder
+    from chatsql.rag.retriever import Retriever
+
+    return Retriever(settings.rag.index_dir, SentenceTransformerEmbedder(settings.rag.embedding_model))
+
+
 def ask(
     llm: LLMClient,
     settings: Settings,
@@ -74,16 +85,22 @@ def ask(
     question: str,
     dialogue_history: list[Message] | None = None,
     save_trace_to: Path | None | object = _UNSET,
+    retriever=_UNSET,
+    exclude_question_ids: list[int] | None = None,
 ) -> AgentState:
     """跑一轮完整 Agent 问答，返回最终状态（含 answer/status/trace）。
 
     save_trace_to 默认（不传）写入 settings.trace_dir；显式传 None 则关闭落盘。
+    retriever 默认按 settings.rag 自动构建；显式传 None 则关闭检索（测试/消融用）。
     """
-    graph = build_agent(llm, settings)
+    if retriever is _UNSET:
+        retriever = _make_retriever(settings)
+    graph = build_agent(llm, settings, retriever=retriever)
     initial: AgentState = {
         "question": question,
         "db_path": str(db_path),
         "dialogue_history": dialogue_history or [],
+        "exclude_question_ids": exclude_question_ids or [],
         "attempts": 0,
         "empty_retried": False,
         "error_history": [],

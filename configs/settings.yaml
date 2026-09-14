@@ -20,6 +20,13 @@ mock:
   # CHATSQL_MOCK=1 或 api_key 为空时使用 mock 客户端（离线开发/测试用）
   enabled: ${CHATSQL_MOCK:-0}
 
+rag:
+  enabled: ${CHATSQL_RAG:-1}     # 0/false 关闭检索（消融用，等同 --no-rag）
+  top_k_examples: 3              # few-shot 相似问答对数量
+  top_k_knowledge: 3             # 业务知识/列描述条数
+  embedding_model: all-MiniLM-L6-v2
+  index_dir: data/index
+
 agent:
   max_correction_rounds: 3    # SQL 生成-执行 的最大纠错轮次
   linking_table_threshold: 20 # 表数超过该值才启用 schema linking 裁剪
