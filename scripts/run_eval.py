@@ -28,9 +28,17 @@ def main() -> int:
     parser.add_argument("--limit", type=int, default=None, help="只跑前 N 题（冒烟用）")
     parser.add_argument("--workers", type=int, default=4)
     parser.add_argument("--tag", default=None, help="运行标签，默认 <config>_<时间戳>；续跑时传同一标签")
+    parser.add_argument("--db", default=None, help="只跑某个库的题（子集实验用）")
+    parser.add_argument("--difficulty", default=None, choices=["simple", "moderate", "challenging"],
+                        help="只跑某个难度的题（子集实验用）")
+    parser.add_argument("--no-empty-retry", action="store_true",
+                        help="关闭空结果软重试（消融实验：验证过度修正问题）")
     args = parser.parse_args()
 
     settings = load_settings()
+    if args.no_empty_retry:
+        import dataclasses
+        settings = dataclasses.replace(settings, retry_on_empty=False)
     if settings.use_mock:
         print("当前是 mock 模式，评测请配置真实 API key")
         return 1
@@ -52,7 +60,8 @@ def main() -> int:
 
     llm = create_llm(settings)
     details = run_eval(args.config, llm, settings, DATA_JSON, out_dir,
-                       limit=args.limit, workers=args.workers, retriever=retriever)
+                       limit=args.limit, workers=args.workers, retriever=retriever,
+                       db_filter=args.db, difficulty_filter=args.difficulty)
     print(f"\n明细已写入 {details}")
     print(f"续跑同一批次：--config {args.config} --tag {tag}")
     return 0

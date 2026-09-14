@@ -106,6 +106,8 @@ def run_eval(
     limit: int | None = None,
     workers: int = 4,
     retriever=None,
+    db_filter: str | None = None,
+    difficulty_filter: str | None = None,
 ) -> Path:
     """跑一组配置的评测，返回 details.jsonl 路径。已完成的 question_id 自动跳过。"""
     assert config in CONFIGS, f"未知配置 {config}，可选：{CONFIGS}"
@@ -113,6 +115,10 @@ def run_eval(
     details_path = out_dir / "details.jsonl"
 
     samples = json.loads(data_json.read_text(encoding="utf-8"))
+    if db_filter:
+        samples = [s for s in samples if s["db_id"] == db_filter]
+    if difficulty_filter:
+        samples = [s for s in samples if s["difficulty"] == difficulty_filter]
     if limit:
         samples = samples[:limit]
 
