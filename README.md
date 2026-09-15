@@ -2,7 +2,7 @@
 
 Agentic Text-to-SQL：用自然语言查询 SQLite 数据库（中英文提问均可）。
 
-BIRD mini_dev 基准（500 题）执行准确率 **54.1%**，高出 BIRD 论文官方 GPT-4 baseline（47.8%）6.3 个百分点；54 个测试；每次问答全链路 trace 落盘。
+BIRD mini_dev 基准（500 题）执行准确率 **54.1%**，高出 BIRD 论文官方 GPT-4 baseline（47.8%）6.3 个百分点；56 个测试；每次问答全链路 trace 落盘。
 
 ![ChatSQL 演示：自然语言提问 → SQL → 结果表 → 自动图表](docs/demo.png)
 
@@ -115,7 +115,7 @@ uv run python cli.py --db sales "上个月各产品的销售额是多少？"
 ├── configs/settings.yaml   # 全部可调参数
 ├── src/chatsql/            # agent / rag / db / llm / eval / viz
 ├── scripts/                # 数据下载、索引构建、评测、报告生成
-├── tests/                  # 54 个测试（uv run pytest）
+├── tests/                  # 56 个测试（uv run pytest）
 └── eval/reports/           # 评测对比报告（含逐题明细）
 ```
 
