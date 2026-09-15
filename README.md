@@ -75,7 +75,7 @@ uv run streamlit run app.py
 
 | 配置 | 默认 | 说明 |
 |---|---|---|
-| `model.name` / `base_url` / `api_key` | deepseek-chat / api.deepseek.com / 空 | 任意 OpenAI 兼容端点；key 为空自动进入 mock 模式 |
+| `model.name` / `base_url` / `api_key` | deepseek-flash / api.deepseek.com / 空 | 任意 OpenAI 兼容端点；key 为空自动进入 mock 模式 |
 | `database.root` | `data/mini_dev_data/dev_databases` | 可用 `CHATSQL_DB_ROOT` 指向自己的库目录 |
 | `agent.max_correction_rounds` | 3 | 生成-执行最大自纠错轮次 |
 | `agent.retry_on_empty` | true | 空结果软重试开关（消融实验产物，见评测章节） |
@@ -121,7 +121,7 @@ uv run python cli.py --db sales "上个月各产品的销售额是多少？"
 
 ## 评测（BIRD mini_dev，500 题，Execution Accuracy）
 
-模型：`deepseek-chat`（temperature=0），2026-09-14。RAG 评测按 question_id 留一排除防泄漏。
+模型：`deepseek-chat`（temperature=0），2026-09-14（该模型随后被官方停用，仓库默认配置已切换为 `deepseek-flash`）。RAG 评测按 question_id 留一排除防泄漏。
 
 | 配置 | EX | 较基线 |
 |---|---|---|

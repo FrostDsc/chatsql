@@ -1,7 +1,7 @@
 # ChatSQL 配置
 model:
   # 任意 OpenAI 兼容端点：DeepSeek / Qwen / OpenAI / Ollama
-  name: ${MODEL_NAME:-deepseek-chat}
+  name: ${MODEL_NAME:-deepseek-flash}
   base_url: ${OPENAI_BASE_URL:-https://api.deepseek.com}
   api_key: ${OPENAI_API_KEY:-}
   temperature: 0.0
