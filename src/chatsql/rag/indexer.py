@@ -74,6 +74,8 @@ def docs_from_column_descriptions(desc_dir: Path) -> list[Doc]:
     return docs
 
 
-def build_docs_for_db(db_root: Path, data_json: Path, db_id: str) -> list[Doc]:
+def build_docs_for_db(db_root: Path, data_json: Path | None, db_id: str) -> list[Doc]:
+    """data_json 为 None 时只索引列描述（自定义数据库没有 BIRD 问答对的情况）。"""
     desc_dir = db_root / db_id / "database_description"
-    return docs_from_qa(data_json, db_id) + docs_from_column_descriptions(desc_dir)
+    qa_docs = docs_from_qa(data_json, db_id) if data_json else []
+    return qa_docs + docs_from_column_descriptions(desc_dir)

@@ -84,6 +84,35 @@ class TestIndexer:
         assert any("users.age" in t and "age of user" in t for t in texts)
         assert any("users.status" in t and "在职" in t for t in texts)
 
+    def _make_desc_db(self, tmp_path):
+        db_dir = tmp_path / "mydb"
+        desc = db_dir / "database_description"
+        desc.mkdir(parents=True)
+        (desc / "users.csv").write_text(
+            "original_column_name,column_name,column_description,data_format,value_description\n"
+            "age,,age of user,integer,\n",
+            encoding="utf-8",
+        )
+        return tmp_path
+
+    def test_build_docs_without_qa_json(self, tmp_path):
+        """自定义数据库没有问答对文件：data_json=None 时只索引列描述。"""
+        db_root = self._make_desc_db(tmp_path)
+        docs = build_docs_for_db(db_root, None, "mydb")
+        assert len(docs) == 1 and docs[0].kind == "column_doc"
+        assert "users.age" in docs[0].text
+
+    def test_build_docs_custom_qa_json(self, tmp_path):
+        """自带问答对 JSON（BIRD 格式）时与列描述合并索引。"""
+        db_root = self._make_desc_db(tmp_path)
+        qa = tmp_path / "my_qa.json"
+        qa.write_text(json.dumps([
+            {"question_id": 1, "db_id": "mydb", "question": "最老的用户几岁？", "evidence": "", "SQL": "SELECT MAX(age) FROM users"},
+        ]), encoding="utf-8")
+        docs = build_docs_for_db(db_root, qa, "mydb")
+        kinds = {d.kind for d in docs}
+        assert kinds == {"example", "column_doc"}  # evidence 为空 → 无 knowledge
+
 
 @pytest.fixture()
 def rag_env(tmp_path, embedder):

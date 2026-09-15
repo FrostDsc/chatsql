@@ -83,6 +83,30 @@ uv run streamlit run app.py
 | `rag.enabled` / `top_k_examples` / `top_k_knowledge` | 开 / 3 / 3 | 检索开关与条数；`CHATSQL_RAG=0` 或 `--no-rag` 关闭 |
 | `execution.timeout_seconds` / `max_rows` | 30 / 100 | 只读执行的保护限制 |
 
+## 用自己的数据
+
+agent 直接读 SQLite 文件里的 schema，不依赖 BIRD 数据：
+
+```bash
+# 1. 按约定放库：<root>/<库名>/<库名>.sqlite
+mkdir -p ~/mydata/sales && cp sales.sqlite ~/mydata/sales/
+
+# 2. 指向你的库目录（写进 .env 或 export）
+echo 'CHATSQL_DB_ROOT=/Users/tengxiao/mydata' >> .env
+
+# 3. 正常使用，Web 界面侧边栏也会自动列出
+uv run python cli.py --db sales "上个月各产品的销售额是多少？"
+```
+
+注意：`.env` 里要填真实 API key（mock 模式只返回预置 SQL）；目前仅支持 SQLite，表数超 20 自动启用 schema linking。
+
+自己的数据同样能吃 RAG 增益，两类文档都是可选的：
+
+- **列描述**（业务知识，帮助最大）：在 `<库名>/database_description/<表名>.csv` 里按 BIRD 格式写列说明，列头为 `original_column_name,column_name,column_description,data_format,value_description`，例如解释"amt 单位是万元、已扣退款"
+- **问答对**（few-shot 示例）：按 BIRD 格式写自己的 JSON（`question_id/db_id/question/SQL/evidence`），然后 `uv run python scripts/build_index.py --data-json 你的文件.json`
+
+没有问答对文件时 `build_index.py` 会自动降级为只索引列描述。
+
 ## 项目结构
 
 ```
