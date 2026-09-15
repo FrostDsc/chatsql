@@ -121,7 +121,7 @@ uv run python cli.py --db sales "上个月各产品的销售额是多少？"
 
 ## 评测（BIRD mini_dev，500 题，Execution Accuracy）
 
-模型：`deepseek-chat`（temperature=0），2026-09-14（该模型随后被官方停用，仓库默认配置已切换为 `deepseek-flash`）。RAG 评测按 question_id 留一排除防泄漏。
+模型：`deepseek-flash`（temperature=0），2026-09-14。RAG 评测按 question_id 留一排除防泄漏。
 
 | 配置 | EX | 较基线 |
 |---|---|---|
