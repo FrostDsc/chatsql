@@ -27,6 +27,7 @@ def at(monkeypatch, tmp_path):
         conn.close()
     import streamlit as st
     st.cache_resource.clear()  # 清掉上一个测试缓存的 settings/llm，保证本测试的 db_root 生效
+    st.cache_data.clear()      # schema 抽取结果缓存也要清
     app = AppTest.from_file(APP_PATH, default_timeout=60)
     app.run()
     return app
@@ -48,3 +49,28 @@ def test_ask_question_renders_card(at):
     assert len(at.chat_message) >= 2
     texts = [m.markdown[0].value for m in at.chat_message if m.markdown]
     assert any("测试问题" in t for t in texts)
+
+
+def _schema_expanders(at):
+    return [e for e in at.expander if "Schema" in e.label]
+
+
+def test_schema_panel_renders(at):
+    assert not at.exception
+    # 外层 Schema 面板存在，标注库名和表数
+    outer = _schema_expanders(at)
+    assert len(outer) == 1 and "california_schools" in outer[0].label
+    # fixture 库的表 t（列 a）渲染成了列信息表
+    assert any("`t`" in e.label for e in at.expander)
+    col_tables = [df.value for df in at.dataframe
+                  if list(df.value.columns) == ["列名", "类型", "主键", "示例值"]]
+    assert len(col_tables) == 1
+    assert col_tables[0].iloc[0]["列名"] == "a"
+    assert "1" in col_tables[0].iloc[0]["示例值"]
+
+
+def test_schema_panel_toggle_off(at):
+    # 侧边栏第二个 toggle 是"显示 Schema"，关掉后面板消失
+    at.sidebar.toggle[1].set_value(False).run()
+    assert not at.exception
+    assert _schema_expanders(at) == []

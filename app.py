@@ -28,10 +28,34 @@ def get_retriever():
     return _make_retriever(get_settings())
 
 
+@st.cache_data
+def get_schema(db_path: str):
+    """按库缓存 schema 抽取结果，避免每次 rerun 重查 sqlite。"""
+    from chatsql.db.schema import extract_schema
+    return extract_schema(db_path)
+
+
 def list_databases() -> list[str]:
     settings = get_settings()
     return sorted(p.name for p in settings.db_root.iterdir()
                   if p.is_dir() and (p / f"{p.name}.sqlite").exists())
+
+
+def render_schema_panel(db_path) -> None:
+    """Schema 面板：每张表的列信息、示例值、外键、DDL。"""
+    tables = get_schema(str(db_path))
+    with st.expander(f"📊 Schema：{db_path.stem}（{len(tables)} 张表）", expanded=False):
+        for t in tables:
+            with st.expander(f"`{t.name}`（{len(t.columns)} 列）"):
+                st.dataframe(
+                    [{"列名": c.name, "类型": c.type, "主键": "✓" if c.is_pk else "",
+                      "示例值": ", ".join(c.samples)} for c in t.columns],
+                    width="stretch", hide_index=True,
+                )
+                if t.foreign_keys:
+                    st.caption(f"外键：{'；'.join(t.foreign_keys)}")
+                with st.expander("DDL"):
+                    st.code(t.ddl, language="sql")
 
 
 def render_trace(state) -> None:
@@ -73,11 +97,15 @@ def main() -> None:
         st.header("设置")
         db_id = st.selectbox("数据库", db_ids)
         use_rag = st.toggle("RAG 检索增强", value=settings.rag.enabled)
+        show_schema = st.toggle("显示 Schema", value=True)
         st.caption(f"模型：`{settings.model.name}`")
         st.caption(f"模式：`{'mock（无 API key）' if settings.use_mock else '在线'}`")
 
     if settings.use_mock:
         st.warning("未配置 API key，当前为 mock 演示模式（SQL 为预置值）", icon="⚠️")
+
+    if show_schema:
+        render_schema_panel(settings.db_root / db_id / f"{db_id}.sqlite")
 
     if "messages" not in st.session_state:
         st.session_state.messages = []       # 渲染用：{role, content/state}

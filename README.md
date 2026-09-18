@@ -63,7 +63,7 @@ uv run python cli.py --db student_club --chat
 # 调试：打印每步 trace；--mode direct 使用无纠错的单发 baseline
 uv run python cli.py --db student_club --verbose "What's Angela Sanders's major?"
 
-# Web 界面（推荐演示用）：选库、对话、SQL/结果表/自动图表、侧边栏 trace
+# Web 界面（推荐演示用）：选库、Schema 面板、对话、SQL/结果表/自动图表、侧边栏 trace
 uv run streamlit run app.py
 ```
 
