@@ -35,6 +35,13 @@ def get_schema(db_path: str):
     return extract_schema(db_path)
 
 
+@st.cache_data
+def get_column_descriptions(db_dir: str):
+    """按库缓存列描述（database_description/*.csv），没有则为空表。"""
+    from chatsql.db.schema import load_column_descriptions
+    return load_column_descriptions(db_dir)
+
+
 def list_databases() -> list[str]:
     settings = get_settings()
     return sorted(p.name for p in settings.db_root.iterdir()
@@ -42,14 +49,17 @@ def list_databases() -> list[str]:
 
 
 def render_schema_panel(db_path) -> None:
-    """Schema 面板：每张表的列信息、示例值、外键、DDL。"""
+    """Schema 面板：每张表的列信息、示例值、描述、外键、DDL。"""
     tables = get_schema(str(db_path))
+    descs = get_column_descriptions(str(db_path.parent))
     with st.expander(f"📊 Schema：{db_path.stem}（{len(tables)} 张表）", expanded=False):
         for t in tables:
             with st.expander(f"`{t.name}`（{len(t.columns)} 列）"):
+                table_descs = descs.get(t.name, {})
                 st.dataframe(
                     [{"列名": c.name, "类型": c.type, "主键": "✓" if c.is_pk else "",
-                      "示例值": ", ".join(c.samples)} for c in t.columns],
+                      "示例值": ", ".join(c.samples),
+                      "描述": table_descs.get(c.name) or "暂无细节描述"} for c in t.columns],
                     width="stretch", hide_index=True,
                 )
                 if t.foreign_keys:

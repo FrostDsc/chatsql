@@ -102,7 +102,7 @@ uv run python cli.py --db sales "上个月各产品的销售额是多少？"
 
 自己的数据同样能吃 RAG 增益，两类文档都是可选的：
 
-- **列描述**（业务知识，帮助最大）：在 `<库名>/database_description/<表名>.csv` 里按 BIRD 格式写列说明，列头为 `original_column_name,column_name,column_description,data_format,value_description`，例如解释"amt 单位是万元、已扣退款"
+- **列描述**（业务知识，帮助最大）：在 `<库名>/database_description/<表名>.csv` 里按 BIRD 格式写列说明，列头为 `original_column_name,column_name,column_description,data_format,value_description`，例如解释"amt 单位是万元、已扣退款"——这些描述同时也会展示在 Web 界面的 Schema 面板里
 - **问答对**（few-shot 示例）：按 BIRD 格式写自己的 JSON（`question_id/db_id/question/SQL/evidence`），然后 `uv run python scripts/build_index.py --data-json 你的文件.json`
 
 没有问答对文件时 `build_index.py` 会自动降级为只索引列描述。

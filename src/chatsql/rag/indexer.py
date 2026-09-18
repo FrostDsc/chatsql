@@ -7,10 +7,10 @@
 """
 from __future__ import annotations
 
-import csv
 import json
 from pathlib import Path
 
+from chatsql.db.schema import read_csv_rows
 from chatsql.rag.store import Doc
 
 
@@ -33,20 +33,6 @@ def docs_from_qa(data_json: Path, db_id: str) -> list[Doc]:
     return docs
 
 
-def _read_csv_rows(csv_path: Path) -> list[dict]:
-    """BIRD 的 CSV 编码不统一（部分含 Windows-1252 字符），做降级解码。"""
-    raw = csv_path.read_bytes()
-    for encoding in ("utf-8-sig", "cp1252"):
-        try:
-            text = raw.decode(encoding)
-            break
-        except UnicodeDecodeError:
-            continue
-    else:
-        text = raw.decode("utf-8", errors="replace")
-    return list(csv.DictReader(text.splitlines()))
-
-
 def docs_from_column_descriptions(desc_dir: Path) -> list[Doc]:
     """把 database_description/*.csv 的每行变成一条 column_doc。"""
     docs: list[Doc] = []
@@ -54,7 +40,7 @@ def docs_from_column_descriptions(desc_dir: Path) -> list[Doc]:
         return docs
     for csv_path in sorted(desc_dir.glob("*.csv")):
         table = csv_path.stem
-        for row in _read_csv_rows(csv_path):
+        for row in read_csv_rows(csv_path):
                 col = (row.get("original_column_name") or "").strip()
                 if not col:
                     continue

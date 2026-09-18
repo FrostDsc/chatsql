@@ -23,8 +23,17 @@ def at(monkeypatch, tmp_path):
         db_dir = tmp_path / db
         db_dir.mkdir()
         conn = sqlite3.connect(db_dir / f"{db}.sqlite")
-        conn.executescript("CREATE TABLE t(a INTEGER); INSERT INTO t VALUES (1), (2);")
+        conn.executescript("CREATE TABLE t(a INTEGER, b TEXT, c TEXT); INSERT INTO t VALUES (1, 'x', 'p'), (2, 'y', 'q');")
         conn.close()
+        desc_dir = db_dir / "database_description"
+        desc_dir.mkdir()
+        # a 有真实描述；b 无描述；c 的描述是列名复读 → 后两者面板都显示"暂无细节描述"
+        (desc_dir / "t.csv").write_text(
+            "original_column_name,column_name,column_description,data_format,value_description\n"
+            "a,,年龄,integer,\n"
+            "c,,c,text,\n",
+            encoding="utf-8",
+        )
     import streamlit as st
     st.cache_resource.clear()  # 清掉上一个测试缓存的 settings/llm，保证本测试的 db_root 生效
     st.cache_data.clear()      # schema 抽取结果缓存也要清
@@ -63,10 +72,13 @@ def test_schema_panel_renders(at):
     # fixture 库的表 t（列 a）渲染成了列信息表
     assert any("`t`" in e.label for e in at.expander)
     col_tables = [df.value for df in at.dataframe
-                  if list(df.value.columns) == ["列名", "类型", "主键", "示例值"]]
+                  if list(df.value.columns) == ["列名", "类型", "主键", "示例值", "描述"]]
     assert len(col_tables) == 1
-    assert col_tables[0].iloc[0]["列名"] == "a"
-    assert "1" in col_tables[0].iloc[0]["示例值"]
+    rows = {r["列名"]: r for _, r in col_tables[0].iterrows()}
+    assert "1" in rows["a"]["示例值"]
+    assert rows["a"]["描述"] == "年龄"            # database_description 里的列描述
+    assert rows["b"]["描述"] == "暂无细节描述"     # 无描述时的降级文案
+    assert rows["c"]["描述"] == "暂无细节描述"     # 列名复读视为无描述
 
 
 def test_schema_panel_toggle_off(at):
