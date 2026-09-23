@@ -147,6 +147,28 @@ uv run python scripts/run_eval.py --config agent_rag --tag full_agent_rag
 uv run python scripts/make_report.py full_direct full_agent full_agent_rag
 ```
 
+### Spider（上一代基准，dev 1,034 题 / 20 库）
+
+模型同为 `deepseek-flash`（temperature=0），2026-09-24。口径说明：Spider 的 train/dev 数据库完全不相交，按库建索引的 RAG 在 dev 上零命中、不适用，只跑 direct 与 agent 两配置；Spider 无官方逐题难度标签，表中难度为启发式自算（sqlglot 组件计数，`eval/hardness.py`），与 BIRD 标注口径不同、不可横比。
+
+| 配置 | EX |
+|---|---|
+| baseline（单发直出） | **73.9%**（764/1034） |
+| + 自纠错 | **72.0%**（744/1034） |
+
+**阴性结果在第二个基准上复现**：自纠错在 Spider 上净 **-1.9pp**。逐题归因：45 题回退中 42 题 attempts=1（首轮生成即分叉），根因与 european_football_2 一致——baseline 与 agent 的 prompt 措辞差异带来的**生成方差**，而非纠错机制。另有观察：agent 的 40 个"执行失败"全部是模型对 Spider 早期残缺/超界题目走了澄清路径未产出 SQL，真正的执行错误为 0。两个基准合并的教训：**基准越简单，prompt 方差的代价越可能超过纠错的收益**；这直接指向重做清单中的"baseline 与 agent 共用生成模块"（见局限与方向）。
+
+复现：
+
+```bash
+uv run python scripts/download_spider.py   # 104.7MB，HF 镜像源
+CHATSQL_DB_ROOT=data/spider_data/dev_databases uv run python scripts/run_eval.py \
+    --data-json data/spider_data/spider_dev.json --config direct --tag spider_direct
+CHATSQL_DB_ROOT=data/spider_data/dev_databases uv run python scripts/run_eval.py \
+    --data-json data/spider_data/spider_dev.json --config agent --tag spider_agent
+uv run python scripts/make_report.py spider_direct spider_agent
+```
+
 ## 难点与解决
 
 1. **embedding 模型并发调用死锁**：评测 runner 多线程并发时，sentence-transformers 的模型加载与推理偶发死锁。解法：embedder 内用锁把加载和 encode 串行化（`rag/embedder.py`）——embedding 不是吞吐瓶颈，影响可忽略。
@@ -162,6 +184,7 @@ uv run python scripts/make_report.py full_direct full_agent full_agent_rag
 ## 局限与方向
 
 - 剩余失败以**语义错误**为主（表列选对但条件/聚合逻辑偏差），自纠错对执行错误有效、对语义错误无解——下一步是生成端增强（更精细的 schema linking、ExCoT 式推理链）
+- **baseline 与 agent 的 prompt 措辞不一致**，两个基准的阴性结果（ef2、Spider 全量）都定位到由此产生的生成方差——重做会让两者共用同一个生成模块、只关环路，并考虑每题多次生成报方差
 - 只评了 EX（结果正确性），未评 VES（SQL 执行效率）；真实业务场景还需慢查询治理
 - 索引为离线静态构建，未做增量更新；多轮对话的指代消解目前依赖 prompt，未做专门的对话状态管理
 
@@ -169,6 +192,8 @@ uv run python scripts/make_report.py full_direct full_agent full_agent_rag
 
 [BIRD Mini-Dev](https://github.com/bird-bench/mini_dev)：500 条高质量 text-to-SQL 问答对，覆盖 11 个 SQLite 数据库。
 BIRD 论文：*Can LLM Already Serve as A Database Interface? A Comprehensive Evaluation for Large-Scale Database-Grounded Text-to-SQLs*（NeurIPS 2023），数据遵循 CC BY-SA 4.0。
+
+[Spider](https://yale-lily.github.io/spider)：上一代跨库 text-to-SQL 基准（EMNLP 2018，CC BY-SA 4.0）；本项目使用 dev 集（1,034 题 / 20 库），官方源为 Google Drive，国内经 [SALT-NLP/spider_VALUE](https://huggingface.co/datasets/SALT-NLP/spider_VALUE) 镜像获取完整数据。
 
 ## License
 

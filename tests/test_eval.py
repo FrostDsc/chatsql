@@ -5,6 +5,7 @@ import sqlite3
 import pytest
 
 from chatsql.config import ModelConfig, Settings
+from chatsql.eval.hardness import estimate_hardness
 from chatsql.eval.metrics import breakdown, compare_result_sets, ex_accuracy, failure_categories
 from chatsql.eval.runner import run_eval
 from chatsql.llm.openai_compat import MockClient
@@ -107,3 +108,24 @@ class TestRunner:
         details = _read_details(out_dir / "details.jsonl")
         assert len(details) == 3                                  # 只补跑了 q3
         assert "本次跑 1 题" in capsys.readouterr().out
+
+
+class TestHardness:
+    def test_easy(self):
+        assert estimate_hardness("SELECT name FROM t") == "easy"
+
+    def test_medium(self):
+        assert estimate_hardness("SELECT COUNT(*) FROM t WHERE a > 1") == "medium"
+
+    def test_hard(self):
+        sql = ("SELECT t1.a, COUNT(*) FROM t1 JOIN t2 ON t1.id = t2.id "
+               "GROUP BY t1.a ORDER BY COUNT(*) DESC LIMIT 3")
+        assert estimate_hardness(sql) == "hard"
+
+    def test_extra(self):
+        sql = ("SELECT a FROM t1 WHERE b IN (SELECT b FROM t2 WHERE c > "
+               "(SELECT AVG(c) FROM t3)) UNION SELECT a FROM t4")
+        assert estimate_hardness(sql) == "extra"
+
+    def test_parse_failure_falls_back_easy(self):
+        assert estimate_hardness("这不是 SQL") == "easy"
