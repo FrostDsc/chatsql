@@ -126,6 +126,8 @@ def main() -> None:
         with st.chat_message(msg["role"]):
             if msg["role"] == "user":
                 st.markdown(msg["content"])
+                if msg.get("db"):
+                    st.caption(f"数据库：`{msg['db']}`")
             else:
                 render_result(msg["state"])
 
@@ -133,9 +135,10 @@ def main() -> None:
     if not question:
         return
 
-    st.session_state.messages.append({"role": "user", "content": question})
+    st.session_state.messages.append({"role": "user", "content": question, "db": db_id})
     with st.chat_message("user"):
         st.markdown(question)
+        st.caption(f"数据库：`{db_id}`")
 
     with st.chat_message("assistant"):
         with st.spinner("Agent 工作中…"):

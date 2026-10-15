@@ -60,6 +60,19 @@ def test_ask_question_renders_card(at):
     assert any("测试问题" in t for t in texts)
 
 
+def test_user_message_marks_selected_db(at):
+    # 切库后再次提问，两条用户消息各自标注提问时选中的数据库
+    at.chat_input[0].set_value("问题一").run()
+    at.sidebar.selectbox[0].set_value("student_club")
+    at.chat_input[0].set_value("问题二").run()
+    assert not at.exception
+    user_msgs = [m for m in at.chat_message
+                 if m.markdown and any("问题" in md.value for md in m.markdown)]
+    assert len(user_msgs) == 2
+    assert any("california_schools" in c.value for c in user_msgs[0].caption)
+    assert any("student_club" in c.value for c in user_msgs[1].caption)
+
+
 def _schema_expanders(at):
     return [e for e in at.expander if "Schema" in e.label]
 
